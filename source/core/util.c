@@ -703,7 +703,23 @@ static void util_encode_url(char* out, const char* in, size_t size) {
     size_t len = strlen(in);
     for(u32 i = 0; i < len && pos < size; i++) {
         char c = in[i];
-        if((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == ':' || c == '/' || c == '.' || c == '%' || c == '+' || c == '?' || c == '=' || c == '&' || c == '#') {
+        if(
+        	(c >= '0' && c <= '9') || 
+        	(c >= 'A' && c <= 'Z') || 
+        	(c >= 'a' && c <= 'z') || 
+        	c == '/' || 
+        	c == ':' || 
+        	c == '.' || 
+        	c == '-' || 
+        	c == '_' || 
+        	c == '+' || 
+        	c == '=' || 
+        	c == '?' || 
+        	c == '&' || 
+        	c == '%' || 
+        	c == '#' || 
+        	c == '@'
+        	) {
             out[pos++] = c;
         } else {
             out[pos++] = '%';
