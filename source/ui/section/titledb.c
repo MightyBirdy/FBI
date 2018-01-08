@@ -14,9 +14,6 @@
 
 static list_item install = {"Install", COLOR_TEXT, action_install_titledb};
 
-// TODO: Updating disabled pending TitleDB pull request.
-//static list_item update_all = {"Update All", COLOR_TEXT, action_update_titledb};
-
 typedef struct {
     populate_titledb_data populateData;
 
@@ -59,9 +56,6 @@ static void titledb_action_update(ui_view* view, void* data, linked_list* items,
 
     if(linked_list_size(items) == 0) {
         linked_list_add(items, &install);
-
-        // TODO: Updating disabled pending TitleDB pull request.
-        //linked_list_add(items, &update_all);
     }
 }
 

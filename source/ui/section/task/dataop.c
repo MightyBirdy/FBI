@@ -5,6 +5,9 @@
 
 #include "task.h"
 #include "../../error.h"
+#include "../../prompt.h"
+#include "../../ui.h"
+#include "../../../core/screen.h"
 
 static Result task_data_op_check_running(data_op_data* data, u32 index, u32* srcHandle, u32* dstHandle) {
     Result res = 0;
@@ -146,10 +149,20 @@ static Result task_data_op_delete(data_op_data* data, u32 index) {
     return data->delete(data->data, index);
 }
 
+static void task_data_op_retry_onresponse(ui_view* view, void* data, u32 response) {
+    ((data_op_data*) data)->retryResponse = response == PROMPT_YES;
+}
+
 static void task_data_op_thread(void* arg) {
     data_op_data* data = (data_op_data*) arg;
 
+    bool reset = false;
     for(data->processed = 0; data->processed < data->total; data->processed++) {
+        if(reset) {
+            data->processed = 0;
+            reset = false;
+        }
+
         Result res = 0;
 
         if(R_SUCCEEDED(res = task_data_op_check_running(data, data->processed, NULL, NULL))) {
@@ -167,8 +180,33 @@ static void task_data_op_thread(void* arg) {
 
         data->result = res;
 
-        if(R_FAILED(res) && !data->error(data->data, data->processed, res)) {
-            break;
+        if(R_FAILED(res)) {
+            if(res != R_FBI_CANCELLED) {
+                ui_view* errorView = NULL;
+                bool proceed = data->error(data->data, data->processed, res, &errorView);
+
+                if(errorView != NULL) {
+                    svcWaitSynchronization(errorView->active, U64_MAX);
+                }
+
+                ui_view* retryView = prompt_display_yes_no("Confirmation", "Retry?", COLOR_TEXT, data, NULL, task_data_op_retry_onresponse);
+                if(retryView != NULL) {
+                    svcWaitSynchronization(retryView->active, U64_MAX);
+
+                    if(data->retryResponse) {
+                        if(proceed) {
+                            data->processed--;
+                        } else {
+                            reset = true;
+                        }
+                    } else if(!proceed) {
+                        break;
+                    }
+                }
+            } else {
+                prompt_display_notify("Failure", "Operation cancelled.", COLOR_TEXT, NULL, NULL, NULL);
+                break;
+            }
         }
     }
 
