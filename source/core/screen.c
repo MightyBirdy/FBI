@@ -6,9 +6,9 @@
 #include <3ds.h>
 #include <citro3d.h>
 
-#include "../stb_image/stb_image.h"
+#include "error.h"
 #include "screen.h"
-#include "util.h"
+#include "../libs/stb_image/stb_image.h"
 
 #include "default_shbin.h"
 
@@ -37,26 +37,10 @@ static struct {
     u32 height;
 } textures[MAX_TEXTURES];
 
-static FILE* screen_open_resource(const char* path) {
-    u32 realPathSize = strlen(path) + 17;
-    char realPath[realPathSize];
-
-    snprintf(realPath, realPathSize, "sdmc:/fbi/theme/%s", path);
-    FILE* fd = fopen(realPath, "rb");
-
-    if(fd != NULL) {
-        return fd;
-    } else {
-        snprintf(realPath, realPathSize, "romfs:/%s", path);
-
-        return fopen(realPath, "rb");
-    }
-}
-
 static void screen_set_blend(u32 color, bool rgb, bool alpha) {
     C3D_TexEnv* env = C3D_GetTexEnv(0);
     if(env == NULL) {
-        util_panic("Failed to retrieve combiner settings.");
+        error_panic("Failed to retrieve combiner settings.");
         return;
     }
 
@@ -81,7 +65,7 @@ static void screen_set_blend(u32 color, bool rgb, bool alpha) {
 
 void screen_init() {
     if(!C3D_Init(C3D_DEFAULT_CMDBUF_SIZE * 4)) {
-        util_panic("Failed to initialize the GPU.");
+        error_panic("Failed to initialize the GPU.");
         return;
     }
 
@@ -91,7 +75,7 @@ void screen_init() {
 
     target_top = C3D_RenderTargetCreate(TOP_SCREEN_HEIGHT, TOP_SCREEN_WIDTH, GPU_RB_RGB8, 0);
     if(target_top == NULL) {
-        util_panic("Failed to initialize the top screen target.");
+        error_panic("Failed to initialize the top screen target.");
         return;
     }
 
@@ -100,7 +84,7 @@ void screen_init() {
 
     target_bottom = C3D_RenderTargetCreate(BOTTOM_SCREEN_HEIGHT, BOTTOM_SCREEN_WIDTH, GPU_RB_RGB8, 0);
     if(target_bottom == NULL) {
-        util_panic("Failed to initialize the bottom screen target.");
+        error_panic("Failed to initialize the bottom screen target.");
         return;
     }
 
@@ -112,13 +96,13 @@ void screen_init() {
 
     dvlb = DVLB_ParseFile((u32*) default_shbin, default_shbin_len);
     if(dvlb == NULL) {
-        util_panic("Failed to parse shader.");
+        error_panic("Failed to parse shader.");
         return;
     }
 
     Result progInitRes = shaderProgramInit(&program);
     if(R_FAILED(progInitRes)) {
-        util_panic("Failed to initialize shader program: 0x%08lX", progInitRes);
+        error_panic("Failed to initialize shader program: 0x%08lX", progInitRes);
         return;
     }
 
@@ -126,7 +110,7 @@ void screen_init() {
 
     Result progSetVshRes = shaderProgramSetVsh(&program, &dvlb->DVLE[0]);
     if(R_FAILED(progSetVshRes)) {
-        util_panic("Failed to set up vertex shader: 0x%08lX", progInitRes);
+        error_panic("Failed to set up vertex shader: 0x%08lX", progInitRes);
         return;
     }
 
@@ -134,7 +118,7 @@ void screen_init() {
 
     C3D_AttrInfo* attrInfo = C3D_GetAttrInfo();
     if(attrInfo == NULL) {
-        util_panic("Failed to retrieve attribute info.");
+        error_panic("Failed to retrieve attribute info.");
         return;
     }
 
@@ -148,14 +132,14 @@ void screen_init() {
 
     Result fontMapRes = fontEnsureMapped();
     if(R_FAILED(fontMapRes)) {
-        util_panic("Failed to map system font: 0x%08lX", fontMapRes);
+        error_panic("Failed to map system font: 0x%08lX", fontMapRes);
         return;
     }
 
     TGLP_s* glyphInfo = fontGetGlyphInfo();
     glyph_sheets = calloc(glyphInfo->nSheets, sizeof(C3D_Tex));
     if(glyph_sheets == NULL) {
-        util_panic("Failed to allocate font glyph texture data.");
+        error_panic("Failed to allocate font glyph texture data.");
         return;
     }
 
@@ -170,81 +154,6 @@ void screen_init() {
     }
 
     font_scale = 30.0f / glyphInfo->cellHeight; // 30 is cellHeight in J machines
-
-    FILE* fd = screen_open_resource("textcolor.cfg");
-    if(fd == NULL) {
-        util_panic("Failed to open text color config: %s\n", strerror(errno));
-        return;
-    }
-
-    char line[128];
-    while(fgets(line, sizeof(line), fd) != NULL) {
-        char key[64];
-        u32 color = 0;
-
-        sscanf(line, "%63[^=]=%lx", key, &color);
-
-        if(strcasecmp(key, "text") == 0) {
-            color_config[COLOR_TEXT] = color;
-        } else if(strcasecmp(key, "nand") == 0) {
-            color_config[COLOR_NAND] = color;
-        } else if(strcasecmp(key, "sd") == 0) {
-            color_config[COLOR_SD] = color;
-        } else if(strcasecmp(key, "gamecard") == 0) {
-            color_config[COLOR_GAME_CARD] = color;
-        } else if(strcasecmp(key, "dstitle") == 0) {
-            color_config[COLOR_DS_TITLE] = color;
-        } else if(strcasecmp(key, "file") == 0) {
-            color_config[COLOR_FILE] = color;
-        } else if(strcasecmp(key, "directory") == 0) {
-            color_config[COLOR_DIRECTORY] = color;
-        } else if(strcasecmp(key, "enabled") == 0) {
-            color_config[COLOR_ENABLED] = color;
-        } else if(strcasecmp(key, "disabled") == 0) {
-            color_config[COLOR_DISABLED] = color;
-        } else if(strcasecmp(key, "titledbinstalled") == 0) {
-            color_config[COLOR_TITLEDB_INSTALLED] = color;
-        } else if(strcasecmp(key, "titledbnotinstalled") == 0) {
-            color_config[COLOR_TITLEDB_NOT_INSTALLED] = color;
-        } else if(strcasecmp(key, "ticketinuse") == 0) {
-            color_config[COLOR_TICKET_IN_USE] = color;
-        } else if(strcasecmp(key, "ticketnotinuse") == 0) {
-            color_config[COLOR_TICKET_NOT_IN_USE] = color;
-        }
-    }
-
-    fclose(fd);
-
-    screen_load_texture_file(TEXTURE_BOTTOM_SCREEN_BG, "bottom_screen_bg.png", true);
-    screen_load_texture_file(TEXTURE_BOTTOM_SCREEN_TOP_BAR, "bottom_screen_top_bar.png", true);
-    screen_load_texture_file(TEXTURE_BOTTOM_SCREEN_TOP_BAR_SHADOW, "bottom_screen_top_bar_shadow.png", true);
-    screen_load_texture_file(TEXTURE_BOTTOM_SCREEN_BOTTOM_BAR, "bottom_screen_bottom_bar.png", true);
-    screen_load_texture_file(TEXTURE_BOTTOM_SCREEN_BOTTOM_BAR_SHADOW, "bottom_screen_bottom_bar_shadow.png", true);
-    screen_load_texture_file(TEXTURE_TOP_SCREEN_BG, "top_screen_bg.png", true);
-    screen_load_texture_file(TEXTURE_TOP_SCREEN_TOP_BAR, "top_screen_top_bar.png", true);
-    screen_load_texture_file(TEXTURE_TOP_SCREEN_TOP_BAR_SHADOW, "top_screen_top_bar_shadow.png", true);
-    screen_load_texture_file(TEXTURE_TOP_SCREEN_BOTTOM_BAR, "top_screen_bottom_bar.png", true);
-    screen_load_texture_file(TEXTURE_TOP_SCREEN_BOTTOM_BAR_SHADOW, "top_screen_bottom_bar_shadow.png", true);
-    screen_load_texture_file(TEXTURE_LOGO, "logo.png", true);
-    screen_load_texture_file(TEXTURE_SELECTION_OVERLAY, "selection_overlay.png", true);
-    screen_load_texture_file(TEXTURE_SCROLL_BAR, "scroll_bar.png", true);
-    screen_load_texture_file(TEXTURE_BUTTON, "button.png", true);
-    screen_load_texture_file(TEXTURE_PROGRESS_BAR_BG, "progress_bar_bg.png", true);
-    screen_load_texture_file(TEXTURE_PROGRESS_BAR_CONTENT, "progress_bar_content.png", true);
-    screen_load_texture_file(TEXTURE_META_INFO_BOX, "meta_info_box.png", true);
-    screen_load_texture_file(TEXTURE_META_INFO_BOX_SHADOW, "meta_info_box_shadow.png", true);
-    screen_load_texture_file(TEXTURE_BATTERY_CHARGING, "battery_charging.png", true);
-    screen_load_texture_file(TEXTURE_BATTERY_0, "battery0.png", true);
-    screen_load_texture_file(TEXTURE_BATTERY_1, "battery1.png", true);
-    screen_load_texture_file(TEXTURE_BATTERY_2, "battery2.png", true);
-    screen_load_texture_file(TEXTURE_BATTERY_3, "battery3.png", true);
-    screen_load_texture_file(TEXTURE_BATTERY_4, "battery4.png", true);
-    screen_load_texture_file(TEXTURE_BATTERY_5, "battery5.png", true);
-    screen_load_texture_file(TEXTURE_WIFI_DISCONNECTED, "wifi_disconnected.png", true);
-    screen_load_texture_file(TEXTURE_WIFI_0, "wifi0.png", true);
-    screen_load_texture_file(TEXTURE_WIFI_1, "wifi1.png", true);
-    screen_load_texture_file(TEXTURE_WIFI_2, "wifi2.png", true);
-    screen_load_texture_file(TEXTURE_WIFI_3, "wifi3.png", true);
 }
 
 void screen_exit() {
@@ -287,6 +196,15 @@ void screen_set_base_alpha(u8 alpha) {
     base_alpha = alpha;
 }
 
+void screen_set_color(u32 id, u32 color) {
+    if(id >= MAX_COLORS) {
+        error_panic("Attempted to draw string with invalid color ID \"%lu\".", id);
+        return;
+    }
+
+    color_config[id] = color;
+}
+
 static u32 screen_next_pow_2(u32 i) {
     i--;
     i |= i >> 1;
@@ -311,7 +229,7 @@ u32 screen_allocate_free_texture() {
     }
 
     if(id == 0) {
-        util_panic("Out of free textures.");
+        error_panic("Out of free textures.");
         return 0;
     }
 
@@ -320,7 +238,7 @@ u32 screen_allocate_free_texture() {
 
 static void screen_prepare_texture(u32* pow2WidthOut, u32* pow2HeightOut, u32 id, u32 width, u32 height, GPU_TEXCOLOR format, bool linearFilter) {
     if(id >= MAX_TEXTURES) {
-        util_panic("Attempted to prepare invalid texture ID \"%lu\".", id);
+        error_panic("Attempted to prepare invalid texture ID \"%lu\".", id);
         return;
     }
 
@@ -340,7 +258,7 @@ static void screen_prepare_texture(u32* pow2WidthOut, u32* pow2HeightOut, u32 id
     }
 
     if(textures[id].tex.data == NULL && !C3D_TexInit(&textures[id].tex, (u16) pow2Width, (u16) pow2Height, format)) {
-        util_panic("Failed to initialize texture with ID \"%lu\".", id);
+        error_panic("Failed to initialize texture with ID \"%lu\".", id);
         return;
     }
 
@@ -401,15 +319,26 @@ void screen_load_texture_untiled(u32 id, void* data, u32 size, u32 width, u32 he
     C3D_TexFlush(&textures[id].tex);
 }
 
-void screen_load_texture_file(u32 id, const char* path, bool linearFilter) {
+void screen_load_texture_path(u32 id, const char* path, bool linearFilter) {
     if(id >= MAX_TEXTURES) {
-        util_panic("Attempted to load path \"%s\" to invalid texture ID \"%lu\".", path, id);
+        error_panic("Attempted to load path \"%s\" to invalid texture ID \"%lu\".", path, id);
         return;
     }
 
-    FILE* fd = screen_open_resource(path);
+    FILE* fd = fopen(path, "rb");
     if(fd == NULL) {
-        util_panic("Failed to load PNG file \"%s\": %s", path, strerror(errno));
+        error_panic("Failed to load PNG file \"%s\": %s", path, strerror(errno));
+        return;
+    }
+
+    screen_load_texture_file(id, fd, linearFilter);
+
+    fclose(fd);
+}
+
+void screen_load_texture_file(u32 id, FILE* fd, bool linearFilter) {
+    if(id >= MAX_TEXTURES) {
+        error_panic("Attempted to load file to invalid texture ID \"%lu\".", id);
         return;
     }
 
@@ -417,10 +346,9 @@ void screen_load_texture_file(u32 id, const char* path, bool linearFilter) {
     int height;
     int depth;
     u8* image = stbi_load_from_file(fd, &width, &height, &depth, STBI_rgb_alpha);
-    fclose(fd);
 
     if(image == NULL || depth != STBI_rgb_alpha) {
-        util_panic("Failed to load PNG file \"%s\".", path);
+        error_panic("Failed to load PNG file to texture ID \"%lu\".", id);
         return;
     }
 
@@ -447,7 +375,7 @@ void screen_load_texture_file(u32 id, const char* path, bool linearFilter) {
 
 void screen_unload_texture(u32 id) {
     if(id >= MAX_TEXTURES) {
-        util_panic("Attempted to unload invalid texture ID \"%lu\".", id);
+        error_panic("Attempted to unload invalid texture ID \"%lu\".", id);
         return;
     }
 
@@ -461,7 +389,7 @@ void screen_unload_texture(u32 id) {
 
 void screen_get_texture_size(u32* width, u32* height, u32 id) {
     if(id >= MAX_TEXTURES) {
-        util_panic("Attempted to get size of invalid texture ID \"%lu\".", id);
+        error_panic("Attempted to get size of invalid texture ID \"%lu\".", id);
         return;
     }
 
@@ -476,7 +404,7 @@ void screen_get_texture_size(u32* width, u32* height, u32 id) {
 
 void screen_begin_frame() {
     if(!C3D_FrameBegin(C3D_FRAME_SYNCDRAW)) {
-        util_panic("Failed to begin frame.");
+        error_panic("Failed to begin frame.");
         return;
     }
 }
@@ -487,7 +415,7 @@ void screen_end_frame() {
 
 void screen_select(gfxScreen_t screen) {
     if(!C3D_FrameDrawOn(screen == GFX_TOP ? target_top : target_bottom)) {
-        util_panic("Failed to select render target.");
+        error_panic("Failed to select render target.");
         return;
     }
 
@@ -514,7 +442,7 @@ static void screen_draw_quad(float x1, float y1, float x2, float y2, float left,
 
 void screen_draw_texture(u32 id, float x, float y, float width, float height) {
     if(id >= MAX_TEXTURES) {
-        util_panic("Attempted to draw invalid texture ID \"%lu\".", id);
+        error_panic("Attempted to draw invalid texture ID \"%lu\".", id);
         return;
     }
 
@@ -536,7 +464,7 @@ void screen_draw_texture(u32 id, float x, float y, float width, float height) {
 
 void screen_draw_texture_crop(u32 id, float x, float y, float width, float height) {
     if(id >= MAX_TEXTURES) {
-        util_panic("Attempted to draw invalid texture ID \"%lu\".", id);
+        error_panic("Attempted to draw invalid texture ID \"%lu\".", id);
         return;
     }
 
@@ -560,80 +488,152 @@ float screen_get_font_height(float scaleY) {
     return scaleY * fontGetInfo()->lineFeed;
 }
 
-static void screen_get_string_size_internal(float* width, float* height, const char* text, float scaleX, float scaleY, bool oneLine, bool wrap, float wrapWidth) {
+#define MAX_LINES 64
+
+inline static void screen_wrap_string_finish_line(float* w, float* h, float* lw, float* lh, u32* line, u32* linePos, u32* lastAlignPos,
+                                                  u32* lines, float* lineWidths, float* lineHeights,
+                                                  u32 maxLines) {
+    if(*lw > *w) {
+        *w = *lw;
+    }
+
+    *h += *lh;
+
+    if(*line < maxLines)  {
+        if(lines != NULL) {
+            lines[*line] = *linePos;
+        }
+
+        if(lineWidths != NULL) {
+            lineWidths[*line] = *lw;
+        }
+
+        if(lineHeights != NULL) {
+            lineHeights[*line] = *lh;
+        }
+
+        (*line)++;
+    }
+
+    *lw = 0;
+    *lh = 0;
+    *linePos = 0;
+    *lastAlignPos = 0;
+}
+
+static void screen_wrap_string(u32* lines, float* lineWidths, float* lineHeights, u32* numLines, float* totalWidth, float* totalHeight,
+                               const char* text, u32 maxLines, float maxWidth, float scaleX, float scaleY, bool wordWrap) {
     scaleX *= font_scale;
     scaleY *= font_scale;
 
     float w = 0;
     float h = 0;
-    float lineWidth = 0;
 
-    if(text != NULL) {
-        h = scaleY * fontGetInfo()->lineFeed;
+    u32 line = 0;
+    float lw = 0;
+    float lh = 0;
+    u32 linePos = 0;
+    u32 lastAlignPos = 0;
+    int wordPos = -1;
+    float ww = 0;
 
-        const uint8_t* p = (const uint8_t*) text;
-        const uint8_t* lastAlign = p;
-        u32 code = 0;
-        ssize_t units = -1;
-        while(*p && (units = decode_utf8(&code, p)) != -1 && code > 0) {
-            p += units;
+    const uint8_t* p = (const uint8_t*) text;
+    u32 code = 0;
+    ssize_t units = -1;
 
-            if(code == '\n' || (wrap && lineWidth + scaleX * fontGetCharWidthInfo(fontGlyphIndexFromCodePoint(code))->charWidth >= wrapWidth)) {
-                lastAlign = p;
+    while(*p && (units = decode_utf8(&code, p)) != -1 && code > 0) {
+        p += units;
 
-                if(lineWidth > w) {
-                    w = lineWidth;
-                }
+        float charWidth = 1;
+        if(code == '\t') {
+            code = ' ';
+            charWidth = 4 - (linePos - lastAlignPos) % 4;
 
-                lineWidth = 0;
+            lastAlignPos = linePos;
+        }
 
-                if(oneLine) {
-                    break;
-                }
+        charWidth *= scaleX * fontGetCharWidthInfo(fontGlyphIndexFromCodePoint(code))->charWidth;
 
-                h += scaleY * fontGetInfo()->lineFeed;
+        if(code == '\n' || (wordWrap && lw + charWidth >= maxWidth)) {
+            if(code == '\n') {
+                linePos++;
+                lh = scaleY * fontGetInfo()->lineFeed;
             }
 
-            if(code != '\n') {
-                u32 num = 1;
-                if(code == '\t') {
-                    code = ' ';
-                    num = 4 - (p - units - lastAlign) % 4;
+            u32 oldLinePos = linePos;
 
-                    lastAlign = p;
-                }
-
-                lineWidth += (scaleX * fontGetCharWidthInfo(fontGlyphIndexFromCodePoint(code))->charWidth) * num;
+            if(code != '\n' && wordPos != -1) {
+                linePos = (u32) wordPos;
+                lw -= ww;
             }
+
+            screen_wrap_string_finish_line(&w, &h, &lw, &lh, &line, &linePos, &lastAlignPos,
+                                           lines, lineWidths, lineHeights,
+                                           maxLines);
+
+            if(code != '\n' && wordPos != -1) {
+                linePos = oldLinePos - wordPos;
+                lw = ww;
+            }
+
+            wordPos = -1;
+            ww = 0;
+        }
+
+        if(code == ' ') {
+            wordPos = -1;
+            ww = 0;
+        } else if(wordPos == -1) {
+            wordPos = (int) linePos;
+            ww = 0;
+        }
+
+        if(code != '\n') {
+            if(wordPos != -1) {
+                ww += charWidth;
+            }
+
+            lw += charWidth;
+            lh = scaleY * fontGetInfo()->lineFeed;
+
+            linePos++;
         }
     }
 
-    if(width) {
-        *width = lineWidth > w ? lineWidth : w;
+    if(linePos > 0)  {
+        screen_wrap_string_finish_line(&w, &h, &lw, &lh, &line, &linePos, &lastAlignPos,
+                                       lines, lineWidths, lineHeights,
+                                       maxLines);
     }
 
-    if(height) {
-        *height = h;
+    if(numLines != NULL) {
+        *numLines = line;
+    }
+
+    if(totalWidth != NULL) {
+        *totalWidth = w;
+    }
+
+    if(totalHeight != NULL) {
+        *totalHeight = h;
     }
 }
 
 void screen_get_string_size(float* width, float* height, const char* text, float scaleX, float scaleY) {
-    screen_get_string_size_internal(width, height, text, scaleX, scaleY, false, false, 0);
+    screen_wrap_string(NULL, NULL, NULL, NULL, width, height, text, 0, 0, scaleX, scaleY, false);
 }
 
 void screen_get_string_size_wrap(float* width, float* height, const char* text, float scaleX, float scaleY, float wrapWidth) {
-    screen_get_string_size_internal(width, height, text, scaleX, scaleY, false, true, wrapWidth);
+    screen_wrap_string(NULL, NULL, NULL, NULL, width, height, text, 0, wrapWidth, scaleX, scaleY, true);
 }
 
 static void screen_draw_string_internal(const char* text, float x, float y, float scaleX, float scaleY, u32 colorId, bool centerLines, bool wrap, float wrapX) {
-    // Note: Do not just multiply scaleX and scaleY by font_scale, as they would then be double-scaled when passed into screen_get_string_size_internal.
-
     if(text == NULL) {
         return;
     }
 
     if(colorId >= MAX_COLORS) {
-        util_panic("Attempted to draw string with invalid color ID \"%lu\".", colorId);
+        error_panic("Attempted to draw string with invalid color ID \"%lu\".", colorId);
         return;
     }
 
@@ -648,62 +648,65 @@ static void screen_draw_string_internal(const char* text, float x, float y, floa
 
     screen_set_blend(blendColor, true, true);
 
-    float stringWidth;
-    screen_get_string_size_internal(&stringWidth, NULL, text, scaleX, scaleY, false, wrap, wrapX - x);
-
-    float lineWidth;
-    screen_get_string_size_internal(&lineWidth, NULL, text, scaleX, scaleY, true, wrap, wrapX - x);
+    u32 lines[MAX_LINES];
+    float lineWidths[MAX_LINES];
+    float lineHeights[MAX_LINES];
+    u32 numLines = 0;
+    float totalWidth = 0;
+    float totalHeight = 0;
+    screen_wrap_string(lines, lineWidths, lineHeights, &numLines, &totalWidth, &totalHeight, text, MAX_LINES, wrapX - x, scaleX, scaleY, wrap);
 
     float currX = x;
-    if(centerLines) {
-        currX += (stringWidth - lineWidth) / 2;
-    }
+    float currY = y;
 
+    u32 linePos = 0;
+    u32 lastAlignPos = 0;
     int lastSheet = -1;
 
     const uint8_t* p = (const uint8_t*) text;
-    const uint8_t* lastAlign = p;
     u32 code = 0;
     ssize_t units = -1;
-    while(*p && (units = decode_utf8(&code, p)) != -1 && code > 0) {
-        p += units;
 
-        if(code == '\n' || (wrap && currX + scaleX * font_scale * fontGetCharWidthInfo(fontGlyphIndexFromCodePoint(code))->charWidth >= wrapX)) {
-            lastAlign = p;
-
-            screen_get_string_size_internal(&lineWidth, NULL, (const char*) p, scaleX, scaleY, true, wrap, wrapX - x);
-
-            currX = x;
-            if(centerLines) {
-                currX += (stringWidth - lineWidth) / 2;
-            }
-
-            y += scaleY * font_scale * fontGetInfo()->lineFeed;
+    for(u32 i = 0; i < numLines; i++) {
+        currX = x;
+        if(centerLines) {
+            currX += (totalWidth - lineWidths[i]) / 2;
         }
 
-        if(code != '\n') {
-            u32 num = 1;
-            if(code == '\t') {
-                code = ' ';
-                num = 4 - (p - units - lastAlign) % 4;
+        while(linePos < lines[i] && *p && (units = decode_utf8(&code, p)) != -1 && code > 0) {
+            p += units;
 
-                lastAlign = p;
+            if(code != '\n') {
+                u32 num = 1;
+                if(code == '\t') {
+                    code = ' ';
+                    num = 4 - (linePos - lastAlignPos) % 4;
+
+                    lastAlignPos = linePos;
+                }
+
+                fontGlyphPos_s data;
+                fontCalcGlyphPos(&data, fontGlyphIndexFromCodePoint(code), GLYPH_POS_CALC_VTXCOORD, scaleX * font_scale, scaleY * font_scale);
+
+                if(data.sheetIndex != lastSheet) {
+                    lastSheet = data.sheetIndex;
+                    C3D_TexBind(0, &glyph_sheets[lastSheet]);
+                }
+
+                for(u32 j = 0; j < num; j++) {
+                    screen_draw_quad(currX + data.vtxcoord.left, currY + data.vtxcoord.top, currX + data.vtxcoord.right, currY + data.vtxcoord.bottom, data.texcoord.left, data.texcoord.bottom, data.texcoord.right, data.texcoord.top);
+
+                    currX += data.xAdvance;
+                }
             }
 
-            fontGlyphPos_s data;
-            fontCalcGlyphPos(&data, fontGlyphIndexFromCodePoint(code), GLYPH_POS_CALC_VTXCOORD, scaleX * font_scale, scaleY * font_scale);
-
-            if(data.sheetIndex != lastSheet) {
-                lastSheet = data.sheetIndex;
-                C3D_TexBind(0, &glyph_sheets[lastSheet]);
-            }
-
-            for(u32 i = 0; i < num; i++) {
-                screen_draw_quad(currX + data.vtxcoord.left, y + data.vtxcoord.top, currX + data.vtxcoord.right, y + data.vtxcoord.bottom, data.texcoord.left, data.texcoord.bottom, data.texcoord.right, data.texcoord.top);
-
-                currX += data.xAdvance;
-            }
+            linePos++;
         }
+
+        currY += lineHeights[i];
+
+        linePos = 0;
+        lastAlignPos = 0;
     }
 
     screen_set_blend(0, false, false);
