@@ -3,12 +3,6 @@
 typedef struct linked_list_s linked_list;
 typedef struct list_item_s list_item;
 
-typedef struct titledb_cache_entry_s {
-    u32 id;
-    char updatedAt[32];
-    char version[32];
-} titledb_cache_entry;
-
 typedef struct titledb_cia_info_s {
     bool exists;
 
@@ -19,7 +13,7 @@ typedef struct titledb_cia_info_s {
     u64 titleId;
 
     bool installed;
-    titledb_cache_entry installedInfo;
+    bool outdated;
 } titledb_cia_info;
 
 typedef struct titledb_smdh_info_s {
@@ -38,7 +32,7 @@ typedef struct titledb_tdsx_info_s {
     titledb_smdh_info smdh;
 
     bool installed;
-    titledb_cache_entry installedInfo;
+    bool outdated;
 } titledb_tdsx_info;
 
 typedef struct titledb_info_s {
@@ -66,8 +60,8 @@ typedef struct populate_titledb_data_s {
     Handle resumeEvent;
 } populate_titledb_data;
 
-void task_populate_titledb_cache_unload();
-void task_populate_titledb_cache_set(u32 id, bool cia, titledb_cache_entry* entry);
+void task_populate_titledb_unload_cache();
+void task_populate_titledb_cache_installed(u32 id, u32 subId, bool cia);
 
 void task_populate_titledb_update_status(list_item* item);
 void task_free_titledb(list_item* item);

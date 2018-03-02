@@ -262,25 +262,15 @@ void task_draw_title_info(ui_view* view, void* data, float x1, float y1, float x
     screen_draw_string(infoText, infoX, infoY, 0.5f, 0.5f, COLOR_TEXT, true);
 }
 
-static void task_format_date(char* out, const char* date, size_t size) {
-    if(strncmp(date, "Unknown", size) == 0) {
-        strncpy(out, date, size);
-    } else {
-        char updatedDate[32] = "";
-        char updatedTime[32] = "";
-        sscanf(date, "%31[^T]T%31[^Z]Z", updatedDate, updatedTime);
-
-        snprintf(out, size, "%s %s", updatedDate, updatedTime);
-    }
-}
-
 void task_draw_titledb_info(ui_view* view, void* data, float x1, float y1, float x2, float y2) {
     titledb_info* info = (titledb_info*) data;
 
     task_draw_meta_info(view, &info->meta, x1, y1, x2, y2);
 
-    char updatedAt[32];
-    task_format_date(updatedAt, info->updatedAt, sizeof(updatedAt));
+    char updatedDate[32] = "";
+    char updatedTime[32] = "";
+
+    sscanf(info->updatedAt, "%31[^T]T%31[^Z]Z", updatedDate, updatedTime);
 
     char infoText[1024];
 
@@ -288,12 +278,12 @@ void task_draw_titledb_info(ui_view* view, void* data, float x1, float y1, float
              "%s\n"
                      "\n"
                      "Category: %s\n"
-                     "Updated At: %s\n"
+                     "Updated At: %s %s\n"
                      "Update Available: %s",
              info->headline,
              info->category,
-             updatedAt,
-             (info->cia.installed && info->cia.installedInfo.id != info->cia.id) || (info->tdsx.installed && info->tdsx.installedInfo.id != info->tdsx.id) ? "Yes" : "No");
+             updatedDate, updatedTime,
+             info->cia.outdated || info->tdsx.outdated ? "Yes" : "No");
 
     float infoWidth;
     screen_get_string_size_wrap(&infoWidth, NULL, infoText, 0.5f, 0.5f, x2 - x1 - 10);
@@ -308,29 +298,24 @@ void task_draw_titledb_info_cia(ui_view* view, void* data, float x1, float y1, f
 
     task_draw_meta_info(view, &info->meta, x1, y1, x2, y2);
 
-    char dbUpdatedAt[32];
-    task_format_date(dbUpdatedAt, info->cia.updatedAt, sizeof(dbUpdatedAt));
+    char updatedDate[32] = "";
+    char updatedTime[32] = "";
 
-    char localUpdatedAt[32];
-    task_format_date(localUpdatedAt, info->cia.installedInfo.updatedAt, sizeof(localUpdatedAt));
+    sscanf(info->cia.updatedAt, "%31[^T]T%31[^Z]Z", updatedDate, updatedTime);
 
     char infoText[512];
 
     snprintf(infoText, sizeof(infoText),
              "Title ID: %016llX\n"
-                     "Size: %.2f %s\n"
-                     "TitleDB Updated At: %s\n"
-                     "Local Updated At: %s\n"
                      "TitleDB Version: %s\n"
-                     "Local Version: %s\n"
+                     "Size: %.2f %s\n"
+                     "Updated At: %s %s\n"
                      "Update Available: %s",
              info->cia.titleId,
-             ui_get_display_size(info->cia.size), ui_get_display_size_units(info->cia.size),
-             dbUpdatedAt,
-             info->cia.installed ? localUpdatedAt : "Not Installed",
              info->cia.version,
-             info->cia.installed ? info->cia.installedInfo.version : "Not Installed",
-             info->cia.installed && info->cia.installedInfo.id != info->cia.id ? "Yes" : "No");
+             ui_get_display_size(info->cia.size), ui_get_display_size_units(info->cia.size),
+             updatedDate, updatedTime,
+             info->cia.outdated ? "Yes" : "No");
 
     float infoWidth;
     screen_get_string_size(&infoWidth, NULL, infoText, 0.5f, 0.5f);
@@ -345,27 +330,22 @@ void task_draw_titledb_info_tdsx(ui_view* view, void* data, float x1, float y1, 
 
     task_draw_meta_info(view, &info->meta, x1, y1, x2, y2);
 
-    char dbUpdatedAt[32];
-    task_format_date(dbUpdatedAt, info->tdsx.updatedAt, sizeof(dbUpdatedAt));
+    char updatedDate[32] = "";
+    char updatedTime[32] = "";
 
-    char localUpdatedAt[32];
-    task_format_date(localUpdatedAt, info->tdsx.installedInfo.updatedAt, sizeof(localUpdatedAt));
+    sscanf(info->tdsx.updatedAt, "%31[^T]T%31[^Z]Z", updatedDate, updatedTime);
 
     char infoText[512];
 
     snprintf(infoText, sizeof(infoText),
-             "Size: %.2f %s\n"
-                     "TitleDB Updated At: %s\n"
-                     "Local Updated At: %s\n"
-                     "TitleDB Version: %s\n"
-                     "Local Version: %s\n"
+             "TitleDB Version: %s\n"
+                     "Size: %.2f %s\n"
+                     "Updated At: %s %s\n"
                      "Update Available: %s",
-             ui_get_display_size(info->tdsx.size), ui_get_display_size_units(info->tdsx.size),
-             dbUpdatedAt,
-             info->tdsx.installed ? localUpdatedAt : "Not Installed",
              info->tdsx.version,
-             info->tdsx.installed ? info->tdsx.installedInfo.version : "Not Installed",
-             info->tdsx.installed && info->tdsx.installedInfo.id != info->tdsx.id ? "Yes" : "No");
+             ui_get_display_size(info->tdsx.size), ui_get_display_size_units(info->tdsx.size),
+             updatedDate, updatedTime,
+             info->tdsx.outdated ? "Yes" : "No");
 
     float infoWidth;
     screen_get_string_size(&infoWidth, NULL, infoText, 0.5f, 0.5f);
