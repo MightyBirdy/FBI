@@ -123,7 +123,7 @@ static void action_install_url_draw_top(ui_view* view, void* data, float x1, flo
         float urlHeight = 0;
 
         action_install_url_decode_url(installData->urls[installData->installInfo.processed]);
-
+        
         screen_get_string_size_wrap(&urlWidth, &urlHeight, installData->urls[installData->installInfo.processed], 0.5f, 0.5f, x2 - x1 - 10);
 
         float urlX = x1 + (x2 - x1 - urlWidth) / 2;
