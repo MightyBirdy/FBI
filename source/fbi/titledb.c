@@ -11,6 +11,7 @@
 #include "../core/core.h"
 
 static list_item install = {"Install", COLOR_TEXT, action_install_titledb};
+static list_item mark_updated = {"Mark Updated", COLOR_TEXT, action_mark_titledb_updated};
 
 typedef struct {
     populate_titledb_data populateData;
@@ -19,6 +20,7 @@ typedef struct {
     bool show3DSXs;
     bool sortByName;
     bool sortByUpdate;
+    bool sortByStatus;
 
     bool populated;
 } titledb_data;
@@ -76,6 +78,7 @@ static void titledb_action_update(ui_view* view, void* data, linked_list* items,
 
     if(linked_list_size(items) == 0) {
         linked_list_add(items, &install);
+        linked_list_add(items, &mark_updated);
     }
 }
 
@@ -196,7 +199,29 @@ static int titledb_compare(void* data, const void* p1, const void* p2) {
     if(listData->sortByName) {
         return strncasecmp(info1->name, info2->name, sizeof(info1->name));
     } else if(listData->sortByUpdate) {
-        return strncasecmp(data2->updatedAt, data1->updatedAt, sizeof(data2->updatedAt));
+        return strncasecmp(data2->mtime, data1->mtime, sizeof(data2->mtime));
+    } else if(listData->sortByStatus) {
+        bool outdated1 = (data1->cia.installed && data1->cia.installedInfo.id != data1->cia.id)
+                         || (data1->tdsx.installed && data1->tdsx.installedInfo.id != data1->tdsx.id);
+        bool outdated2 = (data2->cia.installed && data2->cia.installedInfo.id != data2->cia.id)
+                         || (data2->tdsx.installed && data2->tdsx.installedInfo.id != data2->tdsx.id);
+
+        if(outdated1 && !outdated2) {
+            return -1;
+        } else if(!outdated1 && outdated2) {
+            return 1;
+        } else {
+            bool installed1 = data1->cia.installed || data1->tdsx.installed;
+            bool installed2 = data2->cia.installed || data2->tdsx.installed;
+
+            if(installed1 && !installed2) {
+                return -1;
+            } else if(!installed1 && installed2) {
+                return 1;
+            } else {
+                return strncasecmp(info1->name, info2->name, sizeof(info1->name));
+            }
+        }
     } else {
         return 0;
     }
@@ -236,12 +261,17 @@ static void titledb_options_update(ui_view* view, void* data, linked_list* items
         bool* val = (bool*) selected->data;
         *val = !(*val);
 
-        if(val == &listData->sortByName || val == &listData->sortByUpdate) {
+        if(val == &listData->sortByName || val == &listData->sortByUpdate || val == &listData->sortByStatus) {
             if(*val) {
                 if(val == &listData->sortByName) {
                     listData->sortByUpdate = false;
+                    listData->sortByStatus = false;
                 } else if(val == &listData->sortByUpdate) {
                     listData->sortByName = false;
+                    listData->sortByStatus = false;
+                } else if(val == &listData->sortByStatus) {
+                    listData->sortByName = false;
+                    listData->sortByUpdate = false;
                 }
 
                 linked_list_iter iter;
@@ -268,6 +298,7 @@ static void titledb_options_update(ui_view* view, void* data, linked_list* items
         titledb_options_add_entry(items, "Show 3DSXs", &listData->show3DSXs);
         titledb_options_add_entry(items, "Sort by name", &listData->sortByName);
         titledb_options_add_entry(items, "Sort by update date", &listData->sortByUpdate);
+        titledb_options_add_entry(items, "Sort by install status", &listData->sortByStatus);
     }
 }
 
@@ -383,6 +414,7 @@ void titledb_open() {
     data->show3DSXs = true;
     data->sortByName = true;
     data->sortByUpdate = false;
+    data->sortByStatus = false;
 
     data->populateData.finished = true;
 
