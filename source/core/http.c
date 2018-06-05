@@ -9,6 +9,7 @@
 #include "fs.h"
 #include "error.h"
 #include "http.h"
+#include "stringutil.h"
 
 #define MAKE_HTTP_USER_AGENT_(major, minor, micro) ("Mozilla/5.0 (Nintendo 3DS; Mobile; rv:10.0) Gecko/20100101 FBI/" #major "." #minor "." #micro)
 #define MAKE_HTTP_USER_AGENT(major, minor, micro) MAKE_HTTP_USER_AGENT_(major, minor, micro)
@@ -90,6 +91,8 @@ Result http_open_ranged(http_context* context, const char* url, bool userAgent, 
         char currUrl[1024];
 
         http_encode_url(currUrl, url, sizeof(currUrl));
+
+        string_copy(currUrl, url, sizeof(currUrl));
 
         char range[64];
         if(rangeEnd > rangeStart) {

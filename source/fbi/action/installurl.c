@@ -186,56 +186,58 @@ static Result action_install_url_open_dst(void* data, u32 index, void* initialRe
     if(*(u16*) initialReadBlock == 0x2020) {
         installData->contentType = CONTENT_CIA;
 
-        u64 titleId = cia_get_title_id((u8*) initialReadBlock);
+        u64 titleId = 0;
+        if(R_SUCCEEDED(res = cia_get_title_id(&titleId, (u8*) initialReadBlock, installData->installInfo.bufferSize))) {
+            FS_MediaType dest = fs_get_title_destination(titleId);
 
-        FS_MediaType dest = fs_get_title_destination(titleId);
+            bool n3ds = false;
+            if(R_SUCCEEDED(APT_CheckNew3DS(&n3ds)) && !n3ds && ((titleId >> 28) & 0xF) == 2) {
+                ui_view* view = prompt_display_yes_no("Confirmation", "Title is intended for New 3DS systems.\nContinue?", COLOR_TEXT, data, action_install_url_draw_top, action_install_url_n3ds_onresponse);
+                if(view != NULL) {
+                    svcWaitSynchronization(view->active, U64_MAX);
+                }
 
-        bool n3ds = false;
-        if(R_SUCCEEDED(APT_CheckNew3DS(&n3ds)) && !n3ds && ((titleId >> 28) & 0xF) == 2) {
-            ui_view* view = prompt_display_yes_no("Confirmation", "Title is intended for New 3DS systems.\nContinue?", COLOR_TEXT, data, action_install_url_draw_top, action_install_url_n3ds_onresponse);
-            if(view != NULL) {
-                svcWaitSynchronization(view->active, U64_MAX);
+                if(!installData->n3dsContinue) {
+                    return R_APP_SKIPPED;
+                }
             }
 
-            if(!installData->n3dsContinue) {
-                return R_APP_SKIPPED;
+            // Deleting FBI before it reinstalls itself causes issues.
+            u64 currTitleId = 0;
+            FS_MediaType currMediaType = MEDIATYPE_NAND;
+
+            if(envIsHomebrew() || R_FAILED(APT_GetAppletInfo((NS_APPID) envGetAptAppId(), &currTitleId, (u8*) &currMediaType, NULL, NULL, NULL)) || titleId != currTitleId || dest != currMediaType) {
+                AM_DeleteTitle(dest, titleId);
+                AM_DeleteTicket(titleId);
+
+                if(dest == MEDIATYPE_SD) {
+                    AM_QueryAvailableExternalTitleDatabase(NULL);
+                }
             }
-        }
 
-        // Deleting FBI before it reinstalls itself causes issues.
-        u64 currTitleId = 0;
-        FS_MediaType currMediaType = MEDIATYPE_NAND;
-
-        if(envIsHomebrew() || R_FAILED(APT_GetAppletInfo((NS_APPID) envGetAptAppId(), &currTitleId, (u8*) &currMediaType, NULL, NULL, NULL)) || titleId != currTitleId || dest != currMediaType) {
-            AM_DeleteTitle(dest, titleId);
-            AM_DeleteTicket(titleId);
-
-            if(dest == MEDIATYPE_SD) {
-                AM_QueryAvailableExternalTitleDatabase(NULL);
+            if(R_SUCCEEDED(res = AM_StartCiaInstall(dest, handle))) {
+                installData->currTitleId = titleId;
             }
-        }
-
-        if(R_SUCCEEDED(res = AM_StartCiaInstall(dest, handle))) {
-            installData->currTitleId = titleId;
         }
     } else if(*(u16*) initialReadBlock == 0x0100) {
-        installData->contentType = CONTENT_TICKET;
+        if(R_SUCCEEDED(res = ticket_get_title_id(&installData->ticketInfo.titleId, (u8*) initialReadBlock, installData->installInfo.bufferSize))) {
+            installData->contentType = CONTENT_TICKET;
 
-        if(!installData->cdnDecided) {
-            static const char* options[3] = {"Default\nVersion", "Select\nVersion", "No"};
-            static u32 optionButtons[3] = {KEY_A, KEY_X, KEY_B};
-            ui_view* view = prompt_display_multi_choice("Optional", "Install ticket titles from CDN?", COLOR_TEXT, options, optionButtons, 3, data, action_install_url_draw_top, action_install_url_cdn_check_onresponse);
-            if(view != NULL) {
-                svcWaitSynchronization(view->active, U64_MAX);
+            if(!installData->cdnDecided) {
+                static const char* options[3] = {"Default\nVersion", "Select\nVersion", "No"};
+                static u32 optionButtons[3] = {KEY_A, KEY_X, KEY_B};
+                ui_view* view = prompt_display_multi_choice("Optional", "Install ticket titles from CDN?", COLOR_TEXT, options, optionButtons, 3, data, action_install_url_draw_top, action_install_url_cdn_check_onresponse);
+                if(view != NULL) {
+                    svcWaitSynchronization(view->active, U64_MAX);
+                }
             }
+
+            installData->ticketInfo.inUse = false;
+            installData->ticketInfo.loaded = true;
+
+            AM_DeleteTicket(installData->ticketInfo.titleId);
+            res = AM_InstallTicketBegin(handle);
         }
-
-        installData->ticketInfo.titleId = ticket_get_title_id((u8*) initialReadBlock);
-        installData->ticketInfo.inUse = false;
-        installData->ticketInfo.loaded = true;
-
-        AM_DeleteTicket(installData->ticketInfo.titleId);
-        res = AM_InstallTicketBegin(handle);
     } else if(*(u32*) initialReadBlock == 0x58534433 /* 3DSX */ || *(u32*) initialReadBlock == 0x48444D53 /* SMDH */) {
         installData->contentType = CONTENT_3DSX_SMDH;
 
@@ -244,7 +246,7 @@ static Result action_install_url_open_dst(void* data, u32 index, void* initialRe
             char dir[FILE_PATH_MAX];
             if(strlen(installData->paths[index]) > 0) {
                 string_get_parent_path(dir, installData->paths[index], FILE_PATH_MAX);
-                strncpy(installData->currPath, installData->paths[index], FILE_PATH_MAX);
+                string_copy(installData->currPath, installData->paths[index], FILE_PATH_MAX);
             } else {
                 char filename[FILE_NAME_MAX];
                 if(R_FAILED(http_get_file_name(installData->currContext, filename, FILE_NAME_MAX))) {
@@ -445,14 +447,14 @@ void action_install_url(const char* confirmMessage, const char* urls, const char
                     len = DOWNLOAD_URL_MAX - 7;
                 }
 
-                strncpy(data->urls[data->installInfo.total], "http://", 7);
-                strncpy(&data->urls[data->installInfo.total][7], currStart, len);
+                string_copy(data->urls[data->installInfo.total], "http://", 7);
+                string_copy(&data->urls[data->installInfo.total][7], currStart, len);
             } else {
                 if(len > DOWNLOAD_URL_MAX) {
                     len = DOWNLOAD_URL_MAX;
                 }
 
-                strncpy(data->urls[data->installInfo.total], currStart, len);
+                string_copy(data->urls[data->installInfo.total], currStart, len);
             }
 
             data->installInfo.total++;
@@ -475,7 +477,7 @@ void action_install_url(const char* confirmMessage, const char* urls, const char
                     len = FILE_PATH_MAX;
                 }
 
-                strncpy(data->paths[i], currStart, len);
+                string_copy(data->paths[i], currStart, len);
 
                 currStart = currEnd + 1;
             }
