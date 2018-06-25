@@ -26,55 +26,6 @@ struct http_context_s {
     u32 bufferSize;
 };
 
-static char http_dec2hex(u8 c) {
-    if(c >= 0 && c <= 9) {
-        return (char) ('0' + c);
-    } else if(c >= 10 && c <= 15) {
-        return (char) ('A' + (c - 10));
-    } else {
-        return -1;
-    }
-}
-
-static void http_encode_url(char* out, const char* in, size_t size) {
-    u32 pos = 0;
-    size_t len = strlen(in);
-    for(u32 i = 0; i < len && pos < size; i++) {
-        char c = in[i];
-        if(
-            (c >= '0' && c <= '9') || 
-            (c >= 'A' && c <= 'Z') || 
-            (c >= 'a' && c <= 'z') || 
-            c == '/' || 
-            c == ':' || 
-            c == '.' || 
-            c == '-' || 
-            c == '_' || 
-            c == '+' || 
-            c == '=' || 
-            c == '?' || 
-            c == '&' || 
-            c == '%' || 
-            c == '#' || 
-            c == '@'
-            ) {
-            out[pos++] = c;
-        } else {
-            out[pos++] = '%';
-
-            if(pos < size) {
-                out[pos++] = http_dec2hex((u8) (((u8) c) / 16));
-            }
-
-            if(pos < size) {
-                out[pos++] = http_dec2hex((u8) (((u8) c) % 16));
-            }
-        }
-    }
-
-    out[pos < size ? pos : size - 1] = '\0';
-}
-
 Result http_open(http_context* context, const char* url, bool userAgent) {
     return http_open_ranged(context, url, userAgent, 0, 0);
 }
@@ -89,10 +40,8 @@ Result http_open_ranged(http_context* context, const char* url, bool userAgent, 
     http_context ctx = (http_context) calloc(1, sizeof(struct http_context_s));
     if(ctx != NULL) {
         char currUrl[1024];
-
-        http_encode_url(currUrl, url, sizeof(currUrl));
-
-        string_copy(currUrl, url, sizeof(currUrl));
+        
+        url_encode(currUrl, url, sizeof(currUrl));
 
         char range[64];
         if(rangeEnd > rangeStart) {
