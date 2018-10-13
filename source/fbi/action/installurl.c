@@ -8,6 +8,7 @@
 #include "../resources.h"
 #include "../task/uitask.h"
 #include "../../core/core.h"
+#include "../../core/stringutil.h"
 
 typedef enum content_type_e {
     CONTENT_CIA,
@@ -58,6 +59,9 @@ static void action_install_url_draw_top(ui_view* view, void* data, float x1, flo
         while(urlY < y2 && index < installData->installInfo.total) {
             float urlWidth = 0;
             float urlHeight = 0;
+
+            url_decode(installData->urls[index]);
+
             screen_get_string_size_wrap(&urlWidth, &urlHeight, installData->urls[index], 0.5f, 0.5f, x2 - x1 - 10);
 
             float urlX = x1 + (x2 - x1 - urlWidth) / 2;
@@ -69,6 +73,9 @@ static void action_install_url_draw_top(ui_view* view, void* data, float x1, flo
     } else {
         float urlWidth = 0;
         float urlHeight = 0;
+
+        url_decode(installData->urls[installData->installInfo.processed]);
+        
         screen_get_string_size_wrap(&urlWidth, &urlHeight, installData->urls[installData->installInfo.processed], 0.5f, 0.5f, x2 - x1 - 10);
 
         float urlX = x1 + (x2 - x1 - urlWidth) / 2;

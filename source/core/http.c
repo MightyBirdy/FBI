@@ -69,7 +69,8 @@ Result http_open_ranged(http_context* context, const char* url, bool userAgent, 
     http_context ctx = (http_context) calloc(1, sizeof(struct http_context_s));
     if(ctx != NULL) {
         char currUrl[1024];
-        string_copy(currUrl, url, sizeof(currUrl));
+        
+        url_encode(currUrl, url, sizeof(currUrl));
 
         char range[64];
         if(rangeEnd > rangeStart) {

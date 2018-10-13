@@ -102,3 +102,85 @@ void string_get_parent_path(char* out, const char* path, u32 size) {
     strncpy(out, path, terminatorPos);
     out[terminatorPos] = '\0';
 }
+
+static char dec2hex(u8 c) {
+    if(c >= 0 && c <= 9) {
+        return (char) ('0' + c);
+    } else if(c >= 10 && c <= 15) {
+        return (char) ('A' + (c - 10));
+    } else {
+        return -1;
+    }
+}
+
+static u32 hex2dec(char c) {
+    if ('0' <= c && c <= '9') {
+        return c - '0';
+    } else if ('a' <= c && c <= 'f') {
+        return c - 'a' + 10;
+    } else if ('A' <= c && c <= 'F') {
+        return c - 'A' + 10;
+    } else {
+        return -1;
+    }
+}
+
+void url_decode(char url[]) {
+    u32 i = 0;
+    u32 res_len = 0;
+    size_t len = strlen(url);
+    char res[1024];
+    for (i = 0; i < len; ++i) {
+        char c = url[i];
+        if (c != '%') {
+            res[res_len++] = c;
+        } else {
+            char c1 = url[++i];
+            char c0 = url[++i];
+            u32 num = 0;
+            num = hex2dec(c1) * 16 + hex2dec(c0);
+            res[res_len++] = num;
+        }
+    }
+    res[res_len] = '\0';
+    strcpy(url, res);
+}
+
+void url_encode(char* out, const char* in, size_t size) {
+    u32 pos = 0;
+    size_t len = strlen(in);
+    for(u32 i = 0; i < len && pos < size; i++) {
+        char c = in[i];
+        if(
+            (c >= '0' && c <= '9') || 
+            (c >= 'A' && c <= 'Z') || 
+            (c >= 'a' && c <= 'z') || 
+            c == '/' || 
+            c == ':' || 
+            c == '.' || 
+            c == '-' || 
+            c == '_' || 
+            c == '+' || 
+            c == '=' || 
+            c == '?' || 
+            c == '&' || 
+            c == '%' || 
+            c == '#' || 
+            c == '@'
+            ) {
+            out[pos++] = c;
+        } else {
+            out[pos++] = '%';
+
+            if(pos < size) {
+                out[pos++] = dec2hex((u8) (((u8) c) / 16));
+            }
+
+            if(pos < size) {
+                out[pos++] = dec2hex((u8) (((u8) c) % 16));
+            }
+        }
+    }
+
+    out[pos < size ? pos : size] = '\0';
+}

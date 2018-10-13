@@ -7,3 +7,6 @@ void string_get_file_name(char* out, const char* file, u32 size);
 void string_escape_file_name(char* out, const char* file, size_t size);
 void string_get_path_file(char* out, const char* path, u32 size);
 void string_get_parent_path(char* out, const char* path, u32 size);
+
+void url_decode(char url[]);
+void url_encode(char* out, const char* in, size_t size);

@@ -21,7 +21,7 @@ static bool remoteinstall_get_last_urls(char* out, size_t size) {
     }
 
     Handle file = 0;
-    if(R_FAILED(FSUSER_OpenFileDirectly(&file, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""), fsMakePath(PATH_ASCII, "/fbi/lasturls"), FS_OPEN_READ, 0))) {
+    if(R_FAILED(FSUSER_OpenFileDirectly(&file, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""), fsMakePath(PATH_ASCII, "/FBI/LastURL"), FS_OPEN_READ, 0))) {
         return false;
     }
 
@@ -39,7 +39,7 @@ static Result remoteinstall_set_last_urls(const char* urls) {
 
     FS_Archive sdmcArchive = 0;
     if(R_SUCCEEDED(res = FSUSER_OpenArchive(&sdmcArchive, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, "")))) {
-        FS_Path path = fsMakePath(PATH_ASCII, "/fbi/lasturls");
+        FS_Path path = fsMakePath(PATH_ASCII, "/FBI/LastURL");
 
         Handle file = 0;
         if(R_SUCCEEDED(FSUSER_OpenFile(&file, sdmcArchive, path, FS_OPEN_READ, 0))) {
@@ -50,7 +50,7 @@ static Result remoteinstall_set_last_urls(const char* urls) {
 
         if(urls != NULL && strlen(urls) != 0
            && R_SUCCEEDED(res)
-           && R_SUCCEEDED(res = fs_ensure_dir(sdmcArchive, "/fbi/"))
+           && R_SUCCEEDED(res = fs_ensure_dir(sdmcArchive, "/FBI/"))
            && R_SUCCEEDED(res = FSUSER_OpenFile(&file, sdmcArchive, path, FS_OPEN_WRITE | FS_OPEN_CREATE, 0))) {
             u32 bytesWritten = 0;
             res = FSFILE_Write(file, &bytesWritten, 0, urls, strlen(urls), FS_WRITE_FLUSH | FS_WRITE_UPDATE_TIME);
@@ -467,8 +467,8 @@ static void remoteinstall_forget_last_request() {
     }
 }
 
-static list_item receive_urls_network = {"Receive URLs over the network", COLOR_TEXT, remoteinstall_receive_urls_network};
 static list_item scan_qr_code = {"Scan QR Code", COLOR_TEXT, remoteinstall_scan_qr_code};
+static list_item receive_urls_network = {"Receive via network", COLOR_TEXT, remoteinstall_receive_urls_network};
 static list_item manually_enter_urls = {"Manually enter URLs", COLOR_TEXT, remoteinstall_manually_enter_urls};
 static list_item repeat_last_request = {"Repeat last request", COLOR_TEXT, remoteinstall_repeat_last_request};
 static list_item forget_last_request = {"Forget last request", COLOR_TEXT, remoteinstall_forget_last_request};
@@ -487,8 +487,8 @@ static void remoteinstall_update(ui_view* view, void* data, linked_list* items, 
     }
 
     if(linked_list_size(items) == 0) {
-        linked_list_add(items, &receive_urls_network);
         linked_list_add(items, &scan_qr_code);
+        linked_list_add(items, &receive_urls_network);
         linked_list_add(items, &manually_enter_urls);
         linked_list_add(items, &repeat_last_request);
         linked_list_add(items, &forget_last_request);
